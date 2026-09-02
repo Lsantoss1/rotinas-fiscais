@@ -4,11 +4,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EsferaBadge } from "@/components/ui/EsferaBadge";
+import { GerenciarObrigacoesModal } from "@/components/obrigacoes/GerenciarObrigacoesModal";
 
 async function getObrigacoes() {
   const supabase = await createClient();
-  const hoje = new Date();
-  const mesAtual = format(hoje, "yyyy-MM-01");
 
   const { data } = await supabase
     .from("obrigacoes")
@@ -18,23 +17,40 @@ async function getObrigacoes() {
       estabelecimento:estabelecimentos(id, razao_social, cnpj, is_matriz, grupo:grupos(id, nome)),
       responsavel:usuarios(id, nome)
     `)
-    .gte("competencia", mesAtual)
     .order("prazo_vencimento", { ascending: true })
-    .limit(100);
+    .limit(150);
 
   return data ?? [];
 }
 
+async function getEstabelecimentos() {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("estabelecimentos")
+    .select("id, razao_social, cnpj, grupo:grupos(nome)")
+    .eq("ativo", true)
+    .order("razao_social");
+  return data ?? [];
+}
+
 export default async function ObrigacoesPage() {
-  const obrigacoes = await getObrigacoes();
+  const [obrigacoes, estabelecimentos] = await Promise.all([
+    getObrigacoes(),
+    getEstabelecimentos(),
+  ]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Obrigações Fiscais</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">Todas as obrigações do período atual</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            Obrigações Fiscais
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
+            Acompanhamento de apurações e prazos de entrega (Competência 08/2026 e 09/2026)
+          </p>
         </div>
+        <GerenciarObrigacoesModal estabelecimentos={estabelecimentos} />
       </div>
 
       <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
