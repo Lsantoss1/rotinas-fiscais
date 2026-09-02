@@ -12,13 +12,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Edit2, Plus, Trash2, Building2, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { formatarCNPJ } from "@/lib/utils/cnpj";
@@ -26,6 +19,7 @@ import { formatarCNPJ } from "@/lib/utils/cnpj";
 interface EstabelecimentoData {
   id: string;
   razao_social: string;
+  nome_fantasia?: string;
   cnpj: string;
   is_matriz: boolean;
   regime_tributario: string;
@@ -35,6 +29,17 @@ interface GrupoData {
   id: string;
   nome: string;
   estabelecimentos: EstabelecimentoData[];
+}
+
+function ordenarEstabelecimentos(list: EstabelecimentoData[]) {
+  return [...list].sort((a, b) => {
+    if (a.is_matriz !== b.is_matriz) {
+      return a.is_matriz ? -1 : 1;
+    }
+    const textA = `${a.razao_social || ""} ${a.nome_fantasia || ""}`;
+    const textB = `${b.razao_social || ""} ${b.nome_fantasia || ""}`;
+    return textA.localeCompare(textB, undefined, { numeric: true, sensitivity: "base" });
+  });
 }
 
 export function EditarClienteModal({ grupo }: { grupo: GrupoData }) {
@@ -57,6 +62,7 @@ export function EditarClienteModal({ grupo }: { grupo: GrupoData }) {
 
   const matriz = grupo.estabelecimentos?.find((e) => e.is_matriz);
   const regimePadrao = matriz?.regime_tributario || "lucro_real";
+  const estabelecimentosOrdenados = ordenarEstabelecimentos(grupo.estabelecimentos || []);
 
   async function handleUpdateNomeGrupo() {
     if (!nomeGrupo.trim()) return;
@@ -213,7 +219,7 @@ export function EditarClienteModal({ grupo }: { grupo: GrupoData }) {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                Estabelecimentos Cadastrados ({grupo.estabelecimentos?.length ?? 0})
+                Estabelecimentos Cadastrados ({estabelecimentosOrdenados.length})
               </h4>
               <Button
                 type="button"
@@ -274,7 +280,7 @@ export function EditarClienteModal({ grupo }: { grupo: GrupoData }) {
 
             {/* Lista dos Estabelecimentos */}
             <div className="space-y-2">
-              {grupo.estabelecimentos?.map((est) => {
+              {estabelecimentosOrdenados.map((est) => {
                 const isEditing = editingEstId === est.id;
                 return (
                   <div

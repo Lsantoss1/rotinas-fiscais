@@ -11,12 +11,11 @@ async function getGrupos() {
     .from("grupos")
     .select(`
       id, nome, ativo,
-      estabelecimentos(id, cnpj, razao_social, is_matriz, regime_tributario, ativo)
+      estabelecimentos(id, cnpj, razao_social, nome_fantasia, is_matriz, regime_tributario, ativo)
     `)
     .eq("ativo", true)
     .order("nome");
-  
-  // Filtrar apenas estabelecimentos ativos
+
   if (data) {
     data.forEach((g: any) => {
       if (g.estabelecimentos) {
@@ -26,6 +25,19 @@ async function getGrupos() {
   }
 
   return data ?? [];
+}
+
+function ordenarEstabelecimentos(list: any[]) {
+  return [...list].sort((a, b) => {
+    // 1. Matriz vem sempre primeiro
+    if (a.is_matriz !== b.is_matriz) {
+      return a.is_matriz ? -1 : 1;
+    }
+    // 2. Ordenação natural por razão social / nome fantasia (ex: Alpha 01, Alpha 02, Posto 4, Posto 5)
+    const textA = `${a.razao_social || ""} ${a.nome_fantasia || ""}`;
+    const textB = `${b.razao_social || ""} ${b.nome_fantasia || ""}`;
+    return textA.localeCompare(textB, undefined, { numeric: true, sensitivity: "base" });
+  });
 }
 
 const regimeLabel: Record<string, string> = {
@@ -43,7 +55,7 @@ export default async function ClientesPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Clientes</h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
-            Grupos empresariais e seus estabelecimentos (Matriz e Filiais)
+            Grupos empresariais e seus estabelecimentos (Matriz e Filiais ordenadas)
           </p>
         </div>
         <NovoClienteModal />
@@ -61,27 +73,28 @@ export default async function ClientesPage() {
             </CardContent>
           </Card>
         )}
-        {grupos.map((grupo: any) => (
-          <Card key={grupo.id} className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs hover:shadow-md transition-shadow">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="bg-indigo-50 dark:bg-indigo-950/60 p-2.5 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
-                    <Building2 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+        {grupos.map((grupo: any) => {
+          const estabelecimentosOrdenados = ordenarEstabelecimentos(grupo.estabelecimentos || []);
+
+          return (
+            <Card key={grupo.id} className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs hover:shadow-md transition-shadow">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-indigo-50 dark:bg-indigo-950/60 p-2.5 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                      <Building2 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">{grupo.nome}</h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {estabelecimentosOrdenados.length} estabelecimento(s)
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">{grupo.nome}</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {grupo.estabelecimentos?.length ?? 0} estabelecimento(s)
-                    </p>
-                  </div>
+                  <EditarClienteModal grupo={grupo} />
                 </div>
-                <EditarClienteModal grupo={grupo} />
-              </div>
-              <div className="grid gap-2">
-                {grupo.estabelecimentos
-                  ?.sort((a: any, b: any) => b.is_matriz - a.is_matriz)
-                  .map((est: any) => (
+                <div className="grid gap-2">
+                  {estabelecimentosOrdenados.map((est: any) => (
                     <div
                       key={est.id}
                       className={`flex items-center justify-between p-3.5 rounded-xl border transition-colors ${
@@ -93,6 +106,9 @@ export default async function ClientesPage() {
                       <div>
                         <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                           {est.razao_social}
+                          {est.nome_fantasia && (
+                            <span className="text-xs text-slate-500 font-normal">({est.nome_fantasia})</span>
+                          )}
                           {est.is_matriz && (
                             <span className="text-[10px] bg-indigo-600 text-white font-bold px-1.5 py-0.5 rounded tracking-wide">
                               MATRIZ
@@ -110,10 +126,11 @@ export default async function ClientesPage() {
                       </div>
                     </div>
                   ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
