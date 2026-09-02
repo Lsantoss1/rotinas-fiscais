@@ -10,7 +10,8 @@ import {
   FileText,
   Settings,
   LogOut,
-  ClipboardList
+  ClipboardList,
+  Sparkles
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -33,44 +34,47 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen sticky top-0">
+    <aside className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col h-screen sticky top-0 transition-colors">
       {/* Logo */}
-      <div className="p-6 border-b border-gray-200">
+      <div className="p-5 border-b border-slate-100 dark:border-slate-800/80">
         <div className="flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-lg">
-            <FileText className="h-5 w-5 text-white" />
+          <div className="bg-gradient-to-tr from-indigo-600 to-blue-500 p-2.5 rounded-xl shadow-sm text-white">
+            <Sparkles className="h-5 w-5" />
           </div>
           <div>
-            <p className="font-semibold text-sm text-gray-900">Rotinas Fiscais</p>
-            <p className="text-xs text-gray-500">Gestão de Obrigações</p>
+            <p className="font-bold text-sm text-slate-900 dark:text-slate-100 tracking-tight">Rotinas Fiscais</p>
+            <p className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400">Gestão Inteligente</p>
           </div>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
-        {navItems.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className={cn(
-              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-              pathname === href
-                ? 'bg-blue-50 text-blue-700'
-                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </Link>
-        ))}
+      <nav className="flex-1 p-3 space-y-1">
+        {navItems.map(({ href, label, icon: Icon }) => {
+          const isActive = pathname === href
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150',
+                isActive
+                  ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200'
+              )}
+            >
+              <Icon className={cn('h-4 w-4', isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500')} />
+              {label}
+            </Link>
+          )
+        })}
       </nav>
 
       {/* Logout */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-3 border-t border-slate-100 dark:border-slate-800/80">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 w-full transition-colors"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400 w-full transition-colors"
         >
           <LogOut className="h-4 w-4" />
           Sair
