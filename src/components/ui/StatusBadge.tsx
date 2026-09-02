@@ -1,6 +1,6 @@
-﻿import { cn } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 
-export type StatusObrigacao = 'pendente' | 'assumida' | 'entregue' | 'atrasada'
+export type StatusObrigacao = 'pendente' | 'assumida' | 'em_revisao' | 'entregue' | 'atrasada'
 
 const config: Record<StatusObrigacao, { label: string; bg: string; border: string; text: string; dot: string }> = {
   pendente: {
@@ -16,6 +16,13 @@ const config: Record<StatusObrigacao, { label: string; bg: string; border: strin
     border: 'border-sky-200/80 dark:border-sky-800/40',
     text: 'text-sky-700 dark:text-sky-300',
     dot: 'bg-sky-500 animate-pulse',
+  },
+  em_revisao: {
+    label: 'Em Revisão',
+    bg: 'bg-purple-50 dark:bg-purple-950/40',
+    border: 'border-purple-200/80 dark:border-purple-800/40',
+    text: 'text-purple-700 dark:text-purple-300',
+    dot: 'bg-purple-500 animate-pulse',
   },
   entregue: {
     label: 'Entregue',

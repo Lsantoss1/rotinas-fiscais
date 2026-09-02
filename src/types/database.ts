@@ -1,7 +1,7 @@
-﻿export type RegimeTributario = 'lucro_real' | 'lucro_presumido' | 'simples_nacional'
+export type RegimeTributario = 'lucro_real' | 'lucro_presumido' | 'simples_nacional'
 export type Esfera = 'federal' | 'estadual' | 'municipal'
 export type Periodicidade = 'mensal' | 'trimestral' | 'anual' | 'evento' | 'parcela'
-export type StatusObrigacao = 'pendente' | 'assumida' | 'entregue' | 'atrasada'
+export type StatusObrigacao = 'pendente' | 'assumida' | 'em_revisao' | 'entregue' | 'atrasada'
 export type TipoAlerta = 'prazo_10d' | 'prazo_3d' | 'prazo_hoje' | 'atrasado' | 'prazo_alterado'
 export type Abrangencia = 'federal' | 'estadual' | 'municipal'
 
