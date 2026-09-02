@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, FileCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { formatarCNPJ } from "@/lib/utils/cnpj";
 
 export function GerenciarObrigacoesModal({ estabelecimentos }: { estabelecimentos: any[] }) {
   const [open, setOpen] = useState(false);
@@ -164,15 +165,18 @@ export function GerenciarObrigacoesModal({ estabelecimentos }: { estabelecimento
             <div className="space-y-1">
               <Label className="text-xs">Empresa / Estabelecimento *</Label>
               <Select value={estId} onValueChange={(val) => setEstId(val || "")}>
-                <SelectTrigger>
-                  <SelectValue />
+                <SelectTrigger className="text-xs">
+                  <SelectValue placeholder="Selecione a empresa" />
                 </SelectTrigger>
-                <SelectContent>
-                  {estabelecimentos.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>
-                      {e.razao_social} ({e.grupo?.nome})
-                    </SelectItem>
-                  ))}
+                <SelectContent className="max-h-[300px]">
+                  {estabelecimentos.map((e) => {
+                    const empresaTexto = `${e.razao_social}${e.nome_fantasia ? ` (${e.nome_fantasia})` : ""} — ${e.grupo?.nome || ""} (${formatarCNPJ(e.cnpj)})`;
+                    return (
+                      <SelectItem key={e.id} value={e.id} className="text-xs">
+                        {empresaTexto}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>

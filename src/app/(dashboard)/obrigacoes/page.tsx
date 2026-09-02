@@ -5,6 +5,8 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EsferaBadge } from "@/components/ui/EsferaBadge";
 import { GerenciarObrigacoesModal } from "@/components/obrigacoes/GerenciarObrigacoesModal";
+import { EditarObrigacaoExistenteModal } from "@/components/obrigacoes/EditarObrigacaoExistenteModal";
+import { formatarCNPJ } from "@/lib/utils/cnpj";
 
 async function getObrigacoes() {
   const supabase = await createClient();
@@ -12,9 +14,9 @@ async function getObrigacoes() {
   const { data } = await supabase
     .from("obrigacoes")
     .select(`
-      id, prazo_vencimento, status, competencia, assumida_em, entregue_em,
+      id, prazo_vencimento, status, competencia, observacoes, assumida_em, entregue_em,
       tipo_obrigacao:tipos_obrigacao(id, nome, esfera, periodicidade),
-      estabelecimento:estabelecimentos(id, razao_social, cnpj, is_matriz, grupo:grupos(id, nome)),
+      estabelecimento:estabelecimentos(id, razao_social, nome_fantasia, cnpj, is_matriz, grupo:grupos(id, nome)),
       responsavel:usuarios(id, nome)
     `)
     .order("prazo_vencimento", { ascending: true })
@@ -27,7 +29,7 @@ async function getEstabelecimentos() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("estabelecimentos")
-    .select("id, razao_social, cnpj, grupo:grupos(nome)")
+    .select("id, razao_social, nome_fantasia, cnpj, grupo:grupos(nome)")
     .eq("ativo", true)
     .order("razao_social");
   return data ?? [];
@@ -47,7 +49,7 @@ export default async function ObrigacoesPage() {
             Obrigações Fiscais
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
-            Acompanhamento de apurações e prazos de entrega (Competência 08/2026 e 09/2026)
+            Acompanhamento, edição e controle de obrigações (Competência 08/2026 e 09/2026)
           </p>
         </div>
         <GerenciarObrigacoesModal estabelecimentos={estabelecimentos} />
@@ -60,11 +62,11 @@ export default async function ObrigacoesPage() {
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/40">
                   <th className="text-left px-5 py-3 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Obrigação</th>
-                  <th className="text-left px-5 py-3 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Cliente / CNPJ</th>
+                  <th className="text-left px-5 py-3 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Cliente / Empresa</th>
                   <th className="text-left px-5 py-3 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Competência</th>
                   <th className="text-left px-5 py-3 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Vencimento</th>
                   <th className="text-left px-5 py-3 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Status</th>
-                  <th className="text-left px-5 py-3 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Responsável</th>
+                  <th className="text-left px-5 py-3 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -77,6 +79,8 @@ export default async function ObrigacoesPage() {
                 )}
                 {obrigacoes.map((o: any) => {
                   const isAtrasado = new Date(o.prazo_vencimento) < new Date() && o.status !== "entregue";
+                  const empresaNomeExibicao = `${o.estabelecimento?.razao_social}${o.estabelecimento?.nome_fantasia ? ` (${o.estabelecimento.nome_fantasia})` : ""}`;
+
                   return (
                     <tr key={o.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="px-5 py-3.5">
@@ -92,10 +96,13 @@ export default async function ObrigacoesPage() {
                       <td className="px-5 py-3.5">
                         <p className="font-medium text-slate-900 dark:text-slate-100">{o.estabelecimento?.grupo?.nome}</p>
                         <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {o.estabelecimento?.razao_social}
+                          {empresaNomeExibicao}
                           {o.estabelecimento?.is_matriz && (
                             <span className="ml-1.5 text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold px-1 rounded">MATRIZ</span>
                           )}
+                        </p>
+                        <p className="text-[11px] text-slate-400 font-mono">
+                          {formatarCNPJ(o.estabelecimento?.cnpj || "")}
                         </p>
                       </td>
                       <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400 text-xs font-mono">
@@ -113,12 +120,13 @@ export default async function ObrigacoesPage() {
                       <td className="px-5 py-3.5">
                         <StatusBadge status={o.status} />
                       </td>
-                      <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400 text-xs">
-                        {o.responsavel?.nome ? (
-                          <span className="font-medium text-slate-700 dark:text-slate-300">{o.responsavel.nome}</span>
-                        ) : (
-                          <span className="text-slate-400 dark:text-slate-600 italic">Não atribuído</span>
-                        )}
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <EditarObrigacaoExistenteModal obrigacao={o} />
+                          <Link href={`/obrigacoes/${o.id}`} className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">
+                            Detalhes →
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   );
