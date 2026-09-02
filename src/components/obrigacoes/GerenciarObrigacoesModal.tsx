@@ -165,15 +165,22 @@ export function GerenciarObrigacoesModal({ estabelecimentos }: { estabelecimento
             <div className="space-y-1">
               <Label className="text-xs">Empresa / Estabelecimento *</Label>
               <Select value={estId} onValueChange={(val) => setEstId(val || "")}>
-                <SelectTrigger className="text-xs">
+                <SelectTrigger className="text-xs h-auto py-2">
                   <SelectValue placeholder="Selecione a empresa" />
                 </SelectTrigger>
-                <SelectContent className="max-h-[300px]">
+                <SelectContent className="max-w-[90vw] sm:max-w-md w-full max-h-[320px]">
                   {estabelecimentos.map((e) => {
-                    const empresaTexto = `${e.razao_social}${e.nome_fantasia ? ` (${e.nome_fantasia})` : ""} — ${e.grupo?.nome || ""} (${formatarCNPJ(e.cnpj)})`;
+                    const destaqueNome = e.nome_fantasia || e.razao_social;
                     return (
-                      <SelectItem key={e.id} value={e.id} className="text-xs">
-                        {empresaTexto}
+                      <SelectItem key={e.id} value={e.id} className="py-2 cursor-pointer">
+                        <div className="flex flex-col gap-0.5 text-left">
+                          <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                            {destaqueNome} {e.is_matriz && <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold ml-1">(MATRIZ)</span>}
+                          </span>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono leading-tight">
+                            {e.razao_social} • {formatarCNPJ(e.cnpj)}
+                          </span>
+                        </div>
                       </SelectItem>
                     );
                   })}

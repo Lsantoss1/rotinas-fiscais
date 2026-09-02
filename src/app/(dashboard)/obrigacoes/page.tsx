@@ -1,12 +1,7 @@
 ﻿import { createClient } from "@/lib/supabase/server";
-import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
-import Link from "next/link";
-import { StatusBadge } from "@/components/ui/StatusBadge";
-import { EsferaBadge } from "@/components/ui/EsferaBadge";
 import { GerenciarObrigacoesModal } from "@/components/obrigacoes/GerenciarObrigacoesModal";
-import { EditarObrigacaoExistenteModal } from "@/components/obrigacoes/EditarObrigacaoExistenteModal";
-import { formatarCNPJ } from "@/lib/utils/cnpj";
+import { ObrigacoesTableClient } from "@/components/obrigacoes/ObrigacoesTableClient";
 
 async function getObrigacoes() {
   const supabase = await createClient();
@@ -29,9 +24,19 @@ async function getEstabelecimentos() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("estabelecimentos")
-    .select("id, razao_social, nome_fantasia, cnpj, grupo:grupos(nome)")
+    .select("id, razao_social, nome_fantasia, cnpj, is_matriz, grupo:grupos(nome)")
     .eq("ativo", true)
     .order("razao_social");
+
+  if (data) {
+    data.sort((a: any, b: any) => {
+      if (a.is_matriz !== b.is_matriz) return a.is_matriz ? -1 : 1;
+      const textA = `${a.razao_social || ""} ${a.nome_fantasia || ""}`;
+      const textB = `${b.razao_social || ""} ${b.nome_fantasia || ""}`;
+      return textA.localeCompare(textB, undefined, { numeric: true, sensitivity: "base" });
+    });
+  }
+
   return data ?? [];
 }
 
@@ -49,7 +54,7 @@ export default async function ObrigacoesPage() {
             Obrigações Fiscais
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
-            Acompanhamento, edição e controle de obrigações (Competência 08/2026 e 09/2026)
+            Acompanhamento dinâmico, ações rápidas e controle de entregas (Competência 08/2026 e 09/2026)
           </p>
         </div>
         <GerenciarObrigacoesModal estabelecimentos={estabelecimentos} />
@@ -57,83 +62,7 @@ export default async function ObrigacoesPage() {
 
       <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/40">
-                  <th className="text-left px-5 py-3 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Obrigação</th>
-                  <th className="text-left px-5 py-3 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Cliente / Empresa</th>
-                  <th className="text-left px-5 py-3 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Competência</th>
-                  <th className="text-left px-5 py-3 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Vencimento</th>
-                  <th className="text-left px-5 py-3 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Status</th>
-                  <th className="text-left px-5 py-3 font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                {obrigacoes.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="text-center py-10 text-slate-400">
-                      Nenhuma obrigação encontrada para este período.
-                    </td>
-                  </tr>
-                )}
-                {obrigacoes.map((o: any) => {
-                  const isAtrasado = new Date(o.prazo_vencimento) < new Date() && o.status !== "entregue";
-                  const empresaNomeExibicao = `${o.estabelecimento?.razao_social}${o.estabelecimento?.nome_fantasia ? ` (${o.estabelecimento.nome_fantasia})` : ""}`;
-
-                  return (
-                    <tr key={o.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="px-5 py-3.5">
-                        <div className="space-y-1">
-                          <Link href={`/obrigacoes/${o.id}`} className="font-semibold text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-                            {o.tipo_obrigacao?.nome}
-                          </Link>
-                          <div>
-                            <EsferaBadge esfera={o.tipo_obrigacao?.esfera} />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <p className="font-medium text-slate-900 dark:text-slate-100">{o.estabelecimento?.grupo?.nome}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {empresaNomeExibicao}
-                          {o.estabelecimento?.is_matriz && (
-                            <span className="ml-1.5 text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold px-1 rounded">MATRIZ</span>
-                          )}
-                        </p>
-                        <p className="text-[11px] text-slate-400 font-mono">
-                          {formatarCNPJ(o.estabelecimento?.cnpj || "")}
-                        </p>
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400 text-xs font-mono">
-                        {o.competencia ? format(new Date(o.competencia + "T12:00:00"), "MM/yyyy") : "-"}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className={`font-semibold text-xs px-2 py-0.5 rounded ${
-                          isAtrasado
-                            ? "bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300"
-                            : "text-slate-800 dark:text-slate-200"
-                        }`}>
-                          {format(new Date(o.prazo_vencimento + "T12:00:00"), "dd/MM/yyyy")}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <StatusBadge status={o.status} />
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <EditarObrigacaoExistenteModal obrigacao={o} />
-                          <Link href={`/obrigacoes/${o.id}`} className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">
-                            Detalhes →
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ObrigacoesTableClient obrigacoes={obrigacoes} />
         </CardContent>
       </Card>
     </div>
