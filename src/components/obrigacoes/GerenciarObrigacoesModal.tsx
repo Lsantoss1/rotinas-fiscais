@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Settings2, FileCheck } from "lucide-react";
+import { Plus, FileCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export function GerenciarObrigacoesModal({ estabelecimentos }: { estabelecimentos: any[] }) {
@@ -29,14 +29,12 @@ export function GerenciarObrigacoesModal({ estabelecimentos }: { estabelecimento
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  // Form Obrigação Manual
   const [estId, setEstId] = useState(estabelecimentos[0]?.id || "");
   const [nomeObrigacao, setNomeObrigacao] = useState("");
   const [esfera, setEsfera] = useState("federal");
   const [vencimento, setVencimento] = useState("");
   const [competencia, setCompetencia] = useState("2026-08-01");
 
-  // Form Novo Tipo
   const [novoTipoNome, setNovoTipoNome] = useState("");
   const [novoTipoEsfera, setNovoTipoEsfera] = useState("federal");
   const [novoTipoDia, setNovoTipoDia] = useState("20");
@@ -51,7 +49,6 @@ export function GerenciarObrigacoesModal({ estabelecimentos }: { estabelecimento
 
     setLoading(true);
     try {
-      // 1. Criar tipo temporario ou buscar
       const tRes = await fetch("/api/tipos-obrigacao", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -64,14 +61,11 @@ export function GerenciarObrigacoesModal({ estabelecimentos }: { estabelecimento
       const tData = await tRes.json();
       if (!tRes.ok) throw new Error(tData.error || "Erro ao criar tipo de obrigação");
 
-      // 2. Criar obrigacao
-      const oRes = await fetch("/api/obrigacoes", {
+      await fetch("/api/obrigacoes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ competencia }),
       });
-
-      if (!oRes.ok) throw new Error("Erro ao gerar obrigações");
 
       setOpen(false);
       router.refresh();
@@ -105,7 +99,6 @@ export function GerenciarObrigacoesModal({ estabelecimentos }: { estabelecimento
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao cadastrar tipo");
 
-      // Gerar obrigações para competência atual
       await fetch("/api/obrigacoes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -170,7 +163,7 @@ export function GerenciarObrigacoesModal({ estabelecimentos }: { estabelecimento
           <form onSubmit={handleAddObrigacaoManual} className="space-y-3">
             <div className="space-y-1">
               <Label className="text-xs">Empresa / Estabelecimento *</Label>
-              <Select value={estId} onValueChange={setEstId}>
+              <Select value={estId} onValueChange={(val) => setEstId(val || "")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -197,7 +190,7 @@ export function GerenciarObrigacoesModal({ estabelecimentos }: { estabelecimento
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Esfera</Label>
-                <Select value={esfera} onValueChange={setEsfera}>
+                <Select value={esfera} onValueChange={(val) => setEsfera(val || "federal")}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -244,7 +237,7 @@ export function GerenciarObrigacoesModal({ estabelecimentos }: { estabelecimento
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Esfera</Label>
-                <Select value={novoTipoEsfera} onValueChange={setNovoTipoEsfera}>
+                <Select value={novoTipoEsfera} onValueChange={(val) => setNovoTipoEsfera(val || "federal")}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

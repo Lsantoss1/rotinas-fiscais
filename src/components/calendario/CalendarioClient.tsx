@@ -14,7 +14,7 @@ import {
   parseISO,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -28,9 +28,6 @@ import {
   ChevronRight,
   Calendar as CalendarIcon,
   Filter,
-  CheckCircle2,
-  Clock,
-  XCircle,
 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EsferaBadge } from "@/components/ui/EsferaBadge";
@@ -67,11 +64,9 @@ export function CalendarioClient({
   obrigacoesIniciais: ObrigacaoItem[];
   feriados: any[];
 }) {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 7, 1)); // 08/2026 default
+  const [currentDate, setCurrentDate] = useState(new Date(2026, 7, 1));
   const [filtroEsfera, setFiltroEsfera] = useState("todas");
   const [filtroStatus, setFiltroStatus] = useState("todos");
-
-  // Modal para ver obrigações do dia selecionado
   const [diaSelecionado, setDiaSelecionado] = useState<Date | null>(null);
 
   function prevMonth() {
@@ -91,7 +86,6 @@ export function CalendarioClient({
   const diasDoMes = eachDayOfInterval({ start: inicioMes, end: fimMes });
   const primeiroDiaSemana = getDay(inicioMes);
 
-  // Filtrar obrigações
   const obrigaçoesFiltradas = obrigacoesIniciais.filter((o) => {
     if (filtroEsfera !== "todas" && o.tipo_obrigacao?.esfera !== filtroEsfera) return false;
     if (filtroStatus !== "todos" && o.status !== filtroStatus) return false;
@@ -106,7 +100,6 @@ export function CalendarioClient({
 
   return (
     <div className="space-y-5">
-      {/* Top Header & Controles de Mês */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
         <div className="flex items-center gap-3">
           <div className="bg-indigo-50 dark:bg-indigo-950/60 p-2.5 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
@@ -117,12 +110,11 @@ export function CalendarioClient({
               {format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Calendário de Vencimentos e Apurações
+              Calendário de Vencimentos e Apurações (Competência 08/2026)
             </p>
           </div>
         </div>
 
-        {/* Navegação de Mês */}
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={goToday} className="text-xs font-semibold">
             Mês Atual (08/2026)
@@ -141,13 +133,12 @@ export function CalendarioClient({
         </div>
       </div>
 
-      {/* Barra de Filtros */}
       <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
           <Filter className="h-3.5 w-3.5" /> Filtros:
         </div>
 
-        <Select value={filtroEsfera} onValueChange={setFiltroEsfera}>
+        <Select value={filtroEsfera} onValueChange={(val) => setFiltroEsfera(val || "todas")}>
           <SelectTrigger className="h-8 text-xs w-[140px]">
             <SelectValue placeholder="Esfera" />
           </SelectTrigger>
@@ -159,7 +150,7 @@ export function CalendarioClient({
           </SelectContent>
         </Select>
 
-        <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+        <Select value={filtroStatus} onValueChange={(val) => setFiltroStatus(val || "todos")}>
           <SelectTrigger className="h-8 text-xs w-[150px]">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -173,10 +164,8 @@ export function CalendarioClient({
         </Select>
       </div>
 
-      {/* Grade do Calendário */}
       <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
         <CardContent className="p-3">
-          {/* Dias da semana */}
           <div className="grid grid-cols-7 gap-1 mb-2">
             {["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"].map((dia, idx) => (
               <div
@@ -192,9 +181,7 @@ export function CalendarioClient({
             ))}
           </div>
 
-          {/* Células de Dias */}
           <div className="grid grid-cols-7 gap-1.5">
-            {/* Espaços vazios do início do mês */}
             {Array.from({ length: primeiroDiaSemana }).map((_, i) => (
               <div key={`empty-${i}`} className="min-h-[100px] bg-slate-50/30 dark:bg-slate-950/20 rounded-xl border border-dashed border-slate-100 dark:border-slate-900" />
             ))}
@@ -221,7 +208,6 @@ export function CalendarioClient({
                       : "border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-indigo-200 dark:hover:border-indigo-800"
                   }`}
                 >
-                  {/* Cabeçalho do dia */}
                   <div className="flex items-center justify-between">
                     <span
                       className={`text-xs font-bold h-6 w-6 rounded-full flex items-center justify-center ${
@@ -242,7 +228,6 @@ export function CalendarioClient({
                     )}
                   </div>
 
-                  {/* Chips de Obrigações do dia */}
                   <div className="my-1 space-y-1 overflow-hidden">
                     {obrigaçoesDoDia.slice(0, 2).map((o) => (
                       <div
@@ -268,7 +253,6 @@ export function CalendarioClient({
                     )}
                   </div>
 
-                  {/* Footer com contagem */}
                   <div className="text-right">
                     {obrigaçoesDoDia.length > 0 && (
                       <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
@@ -283,7 +267,6 @@ export function CalendarioClient({
         </CardContent>
       </Card>
 
-      {/* Modal para ver todas as obrigações do dia selecionado */}
       <Dialog open={!!diaSelecionado} onOpenChange={(open) => !open && setDiaSelecionado(null)}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
