@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Formata CNPJ de 14 digitos para xx.xxx.xxx/xxxx-xx
  */
 export function formatarCNPJ(cnpj: string): string {
@@ -35,4 +35,39 @@ export function validarCNPJ(cnpj: string): boolean {
   const d2 = calcDigito(c.slice(0,13), w2)
 
   return parseInt(c[12]) === d1 && parseInt(c[13]) === d2
+}
+
+/**
+ * Formata nome de exibição de estabelecimentos identificando Alpha 01, Alpha 02...
+ */
+export function formatarNomeEmpresa(est: any): { labelDestaque: string; subtitulo: string } {
+  if (!est) return { labelDestaque: '', subtitulo: '' }
+
+  const cnpj = est.cnpj || ''
+  const digits = cnpj.replace(/\D/g, '')
+  let filialNum = ''
+  if (digits.length === 14) {
+    const rawFilial = digits.slice(8, 12)
+    const num = parseInt(rawFilial, 10)
+    filialNum = num < 10 ? `0${num}` : `${num}`
+  }
+
+  let prefixo = filialNum ? `Alpha ${filialNum}` : ''
+  if (est.is_matriz) {
+    prefixo = 'Alpha 01 - Matriz'
+  }
+
+  let complemento = est.nome_fantasia || ''
+  if (!complemento && est.razao_social) {
+    const match = est.razao_social.match(/POSTO\s+ALPHA\s+\d+|FILIAL\s+[^-]+/i)
+    if (match) complemento = match[0]
+  }
+
+  let labelDestaque = prefixo
+  if (complemento && !labelDestaque.toLowerCase().includes(complemento.toLowerCase())) {
+    labelDestaque = `${prefixo} • ${complemento}`
+  }
+
+  const subtitulo = `${est.razao_social} (${formatarCNPJ(cnpj)})`
+  return { labelDestaque, subtitulo }
 }

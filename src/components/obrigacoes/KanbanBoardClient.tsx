@@ -6,8 +6,7 @@ import Link from "next/link";
 import { EsferaBadge } from "@/components/ui/EsferaBadge";
 import { EditarObrigacaoExistenteModal } from "@/components/obrigacoes/EditarObrigacaoExistenteModal";
 import { QuickConcluirModal } from "@/components/obrigacoes/QuickConcluirModal";
-import { formatarCNPJ } from "@/lib/utils/cnpj";
-import { Button } from "@/components/ui/button";
+import { formatarCNPJ, formatarNomeEmpresa } from "@/lib/utils/cnpj";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -73,9 +72,10 @@ function sortCardItens(itens: any[]) {
     const isMatrizB = b.estabelecimento?.is_matriz ? 1 : 0;
     if (isMatrizA !== isMatrizB) return isMatrizB - isMatrizA;
 
-    const nameA = `${a.estabelecimento?.razao_social || ""} ${a.estabelecimento?.nome_fantasia || ""}`;
-    const nameB = `${b.estabelecimento?.razao_social || ""} ${b.estabelecimento?.nome_fantasia || ""}`;
-    return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: "base" });
+    // Ordenar pelo CNPJ para garantir a sequência natural 0001, 0002, 0003... 0010
+    const cnpjA = a.estabelecimento?.cnpj || "";
+    const cnpjB = b.estabelecimento?.cnpj || "";
+    return cnpjA.localeCompare(cnpjB, undefined, { numeric: true });
   });
 }
 
@@ -114,7 +114,7 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
     return Array.from(setGrupos).sort();
   }, [obrigacoes]);
 
-  // Filtragem (aplica competencia, grupo, esfera e busca)
+  // Filtragem
   const obrigacoesFiltradas = useMemo(() => {
     return obrigacoes.filter((o) => {
       if (filtroCompetencia !== "todas" && o.competencia !== filtroCompetencia) return false;
@@ -261,7 +261,7 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Filtro de Competencia (Crucial para não misturar meses) */}
+          {/* Filtro de Competencia */}
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-slate-500 font-medium">Competência:</span>
             <Select value={filtroCompetencia} onValueChange={(val) => setFiltroCompetencia(val || "2026-08-01")}>
@@ -354,7 +354,7 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
             return o.status === col.id;
           });
 
-          // Agrupamento por Obrigação + Grupo + Competência (Impede misturar meses!)
+          // Agrupamento por Obrigação + Grupo + Competência
           const gruposCards = useMemo(() => {
             if (!modoAgrupado) return null;
 
@@ -384,7 +384,6 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
               map[key].itens.push(item);
             });
 
-            // Ordena os itens de cada card para matriz ficar sempre no topo seguida pelas filiais numeradas
             return Object.values(map).map((group) => ({
               ...group,
               itens: sortCardItens(group.itens),
@@ -448,6 +447,9 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
                       const totalFiliais = card.itens.length;
                       const compFormatada = card.competencia ? format(new Date(card.competencia + "T12:00:00"), "MM/yyyy") : "";
 
+                      // Nome formatado Alpha 01, Alpha 02, etc.
+                      const activeInfo = formatarNomeEmpresa(activeItem.estabelecimento);
+
                       return (
                         <div
                           key={cardKey}
@@ -503,7 +505,7 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
                                 Empresa / Filial:
                               </span>
                               {activeItem.estabelecimento?.is_matriz && (
-                                <span className="text-[9px] bg-indigo-600 text-white font-bold px-1 rounded">
+                                <span className="text-[9px] bg-indigo-600 text-white font-bold px-1.5 py-0.5 rounded">
                                   MATRIZ
                                 </span>
                               )}
@@ -520,24 +522,41 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
                                 }
                               }}
                             >
-                              <SelectTrigger className="h-8 text-xs bg-white dark:bg-slate-900 font-medium">
-                                <SelectValue />
+                              {/* Trigger sem UUID! Mostra diretamente o nome formatado */}
+                              <SelectTrigger className="h-auto py-1.5 text-xs bg-white dark:bg-slate-900 font-semibold w-full border-slate-300 dark:border-slate-700">
+                                <div className="flex items-center gap-1.5 truncate text-left mr-1 flex-1">
+                                  <span className="font-bold text-slate-900 dark:text-slate-100 text-xs truncate">
+                                    {activeInfo.labelDestaque}
+                                  </span>
+                                </div>
                               </SelectTrigger>
-                              <SelectContent className="max-w-[320px]">
+
+                              {/* Dropdown Amplo Horizontalmente com layout de 2 linhas */}
+                              <SelectContent
+                                alignItemWithTrigger={false}
+                                className="w-auto min-w-[360px] sm:min-w-[430px] max-w-[95vw] p-1.5 max-h-[340px]"
+                              >
                                 {card.itens.map((it) => {
-                                  const nomeCurto =
-                                    it.estabelecimento?.nome_fantasia || it.estabelecimento?.razao_social || "";
+                                  const info = formatarNomeEmpresa(it.estabelecimento);
                                   return (
-                                    <SelectItem key={it.id} value={it.id} className="text-xs py-1.5">
-                                      <div className="flex flex-col text-left">
-                                        <span className="font-semibold text-slate-900 dark:text-slate-100">
-                                          {nomeCurto}{" "}
+                                    <SelectItem
+                                      key={it.id}
+                                      value={it.id}
+                                      className="text-xs py-2 px-2.5 cursor-pointer rounded-lg hover:bg-indigo-50/60 dark:hover:bg-indigo-950/40"
+                                    >
+                                      <div className="flex flex-col text-left w-full pr-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="font-bold text-slate-900 dark:text-slate-100">
+                                            {info.labelDestaque}
+                                          </span>
                                           {it.estabelecimento?.is_matriz && (
-                                            <span className="text-[10px] text-indigo-600 font-bold ml-1">(MATRIZ)</span>
+                                            <span className="text-[9px] bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300 font-bold px-1 rounded">
+                                              MATRIZ
+                                            </span>
                                           )}
-                                        </span>
-                                        <span className="text-[10px] text-slate-400 font-mono">
-                                          {formatarCNPJ(it.estabelecimento?.cnpj || "")}
+                                        </div>
+                                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
+                                          {info.subtitulo}
                                         </span>
                                       </div>
                                     </SelectItem>
@@ -546,14 +565,14 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
                               </SelectContent>
                             </Select>
 
-                            {/* Mini detalhes da empresa selecionada */}
-                            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between pt-0.5">
-                              <span className="truncate max-w-[170px]" title={activeItem.estabelecimento?.razao_social}>
+                            {/* Detalhes da empresa selecionada (completo sem corte) */}
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
+                              <p className="font-medium text-slate-700 dark:text-slate-300 truncate" title={activeItem.estabelecimento?.razao_social}>
                                 {activeItem.estabelecimento?.razao_social}
-                              </span>
-                              <span className="font-mono text-[10px] shrink-0">
-                                {formatarCNPJ(activeItem.estabelecimento?.cnpj || "")}
-                              </span>
+                              </p>
+                              <p className="font-mono text-[10px] text-slate-400 mt-0.5">
+                                CNPJ: {formatarCNPJ(activeItem.estabelecimento?.cnpj || "")}
+                              </p>
                             </div>
                           </div>
 
@@ -612,9 +631,8 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
                     itensDaColuna.map((o) => {
                       const isAtrasado =
                         new Date(o.prazo_vencimento) < new Date() && o.status !== "entregue";
-                      const empresaNome =
-                        o.estabelecimento?.nome_fantasia || o.estabelecimento?.razao_social || "";
                       const grupoNome = o.estabelecimento?.grupo?.nome || "";
+                      const info = formatarNomeEmpresa(o.estabelecimento);
 
                       return (
                         <div
@@ -643,16 +661,11 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
                             >
                               {o.tipo_obrigacao?.nome}
                             </Link>
-                            <p className="text-xs text-slate-600 dark:text-slate-300 font-medium line-clamp-1 mt-0.5">
-                              {empresaNome}
-                              {o.estabelecimento?.is_matriz && (
-                                <span className="ml-1 text-[9px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-bold px-1 rounded">
-                                  MATRIZ
-                                </span>
-                              )}
+                            <p className="text-xs text-slate-800 dark:text-slate-200 font-semibold line-clamp-1 mt-0.5">
+                              {info.labelDestaque}
                             </p>
-                            <p className="text-[10px] text-slate-400 font-mono">
-                              {formatarCNPJ(o.estabelecimento?.cnpj || "")}
+                            <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              {info.subtitulo}
                             </p>
                           </div>
 
@@ -662,7 +675,7 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
                               <span
                                 className={`font-semibold font-mono text-[11px] ${
                                   isAtrasado
-                                    ? "text-rose-600 dark:text-rose-400"
+                                    ? "text-rose-600 dark:text-rose-400 font-bold"
                                     : "text-slate-700 dark:text-slate-300"
                                 }`}
                               >
