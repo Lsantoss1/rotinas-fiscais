@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import Link from "next/link";
 import { EsferaBadge } from "@/components/ui/EsferaBadge";
@@ -9,7 +9,13 @@ import { QuickConcluirModal } from "@/components/obrigacoes/QuickConcluirModal";
 import { formatarCNPJ } from "@/lib/utils/cnpj";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Calendar,
   Search,
@@ -19,6 +25,10 @@ import {
   FileSearch,
   Sparkles,
   User,
+  Building2,
+  Layers,
+  ArrowRight,
+  GripVertical,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -62,6 +72,10 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
   const [obrigacoes, setObrigacoes] = useState(inicialObrigacoes);
   const [searchTerm, setSearchTerm] = useState("");
   const [filtroEsfera, setFiltroEsfera] = useState("todas");
+  const [filtroGrupo, setFiltroGrupo] = useState("todos");
+  const [modoAgrupado, setModoAgrupado] = useState(true); // Default true (Agrupar por obrigação)
+  const [selectedEstByCard, setSelectedEstByCard] = useState<Record<string, string>>({});
+
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [concluirTarget, setConcluirTarget] = useState<any | null>(null);
@@ -69,21 +83,40 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
   const router = useRouter();
   const supabase = createClient();
 
-  // Filtragem
-  const obrigacoesFiltradas = obrigacoes.filter((o) => {
-    if (filtroEsfera !== "todas" && o.tipo_obrigacao?.esfera !== filtroEsfera) return false;
+  // Lista de grupos unicos para filtro
+  const gruposUnicos = useMemo(() => {
+    const setGrupos = new Set<string>();
+    obrigacoes.forEach((o) => {
+      const gNome = o.estabelecimento?.grupo?.nome;
+      if (gNome) setGrupos.add(gNome);
+    });
+    return Array.from(setGrupos).sort();
+  }, [obrigacoes]);
 
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      const tipo = o.tipo_obrigacao?.nome?.toLowerCase() || "";
-      const grupo = o.estabelecimento?.grupo?.nome?.toLowerCase() || "";
-      const empresa = o.estabelecimento?.razao_social?.toLowerCase() || "";
-      const fantasia = o.estabelecimento?.nome_fantasia?.toLowerCase() || "";
-      const cnpj = o.estabelecimento?.cnpj || "";
-      return tipo.includes(term) || grupo.includes(term) || empresa.includes(term) || fantasia.includes(term) || cnpj.includes(term);
-    }
-    return true;
-  });
+  // Filtragem
+  const obrigacoesFiltradas = useMemo(() => {
+    return obrigacoes.filter((o) => {
+      if (filtroEsfera !== "todas" && o.tipo_obrigacao?.esfera !== filtroEsfera) return false;
+      if (filtroGrupo !== "todos" && o.estabelecimento?.grupo?.nome !== filtroGrupo) return false;
+
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase();
+        const tipo = o.tipo_obrigacao?.nome?.toLowerCase() || "";
+        const grupo = o.estabelecimento?.grupo?.nome?.toLowerCase() || "";
+        const empresa = o.estabelecimento?.razao_social?.toLowerCase() || "";
+        const fantasia = o.estabelecimento?.nome_fantasia?.toLowerCase() || "";
+        const cnpj = o.estabelecimento?.cnpj || "";
+        return (
+          tipo.includes(term) ||
+          grupo.includes(term) ||
+          empresa.includes(term) ||
+          fantasia.includes(term) ||
+          cnpj.includes(term)
+        );
+      }
+      return true;
+    });
+  }, [obrigacoes, filtroEsfera, filtroGrupo, searchTerm]);
 
   // Handler de Arraste
   function handleDragStart(e: React.DragEvent, id: string) {
@@ -112,6 +145,11 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
     const id = e.dataTransfer.getData("text/plain") || draggedId;
     if (!id) return;
 
+    await handleMudarStatus(id, targetColId);
+    setDraggedId(null);
+  }
+
+  async function handleMudarStatus(id: string, targetColId: string) {
     const item = obrigacoes.find((o) => o.id === id);
     if (!item || item.status === targetColId) return;
 
@@ -128,7 +166,9 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
     );
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       const updateData: any = { status: targetColId };
 
       if (targetColId === "assumida" && !item.responsavel_id) {
@@ -150,14 +190,14 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
         prev.map((o) => (o.id === id ? { ...o, status: prevStatus } : o))
       );
       alert("Erro ao alterar status no servidor.");
-    } finally {
-      setDraggedId(null);
     }
   }
 
   async function handleQuickAssumir(id: string) {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       const res = await fetch(`/api/obrigacoes/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -169,7 +209,15 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
       if (res.ok) {
         setObrigacoes((prev) =>
           prev.map((o) =>
-            o.id === id ? { ...o, status: "assumida", responsavel: { nome: user?.email?.split("@")[0] || "Você" } } : o
+            o.id === id
+              ? {
+                  ...o,
+                  status: "assumida",
+                  responsavel: {
+                    nome: user?.email?.split("@")[0] || "Você",
+                  },
+                }
+              : o
           )
         );
         router.refresh();
@@ -182,8 +230,8 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
   return (
     <div className="space-y-4">
       {/* Barra de Busca e Filtros */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-        <div className="relative w-full sm:w-80">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+        <div className="relative w-full lg:w-80">
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <Input
             placeholder="Buscar por obrigação, empresa ou CNPJ..."
@@ -193,19 +241,70 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <span className="text-xs text-slate-500 font-medium">Esfera:</span>
-          <Select value={filtroEsfera} onValueChange={(val) => setFiltroEsfera(val || "todas")}>
-            <SelectTrigger className="h-9 text-xs w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas</SelectItem>
-              <SelectItem value="federal">🏛️ Federal</SelectItem>
-              <SelectItem value="estadual">🗺️ Estadual</SelectItem>
-              <SelectItem value="municipal">🏙️ Municipal</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Filtro de Grupo */}
+          {gruposUnicos.length > 1 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-500 font-medium">Grupo:</span>
+              <Select value={filtroGrupo} onValueChange={(val) => setFiltroGrupo(val || "todos")}>
+                <SelectTrigger className="h-9 text-xs w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os Grupos</SelectItem>
+                  {gruposUnicos.map((g) => (
+                    <SelectItem key={g} value={g}>
+                      {g}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Filtro de Esfera */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500 font-medium">Esfera:</span>
+            <Select value={filtroEsfera} onValueChange={(val) => setFiltroEsfera(val || "todas")}>
+              <SelectTrigger className="h-9 text-xs w-[130px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas</SelectItem>
+                <SelectItem value="federal">🏛️ Federal</SelectItem>
+                <SelectItem value="estadual">🗺️ Estadual</SelectItem>
+                <SelectItem value="municipal">🏙️ Municipal</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Alternador de Agrupamento */}
+          <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setModoAgrupado(true)}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1 cursor-pointer ${
+                modoAgrupado
+                  ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs font-bold"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+              }`}
+              title="Agrupar por obrigação e selecionar a empresa dentro do card"
+            >
+              <Layers className="h-3.5 w-3.5" /> Agrupado
+            </button>
+            <button
+              type="button"
+              onClick={() => setModoAgrupado(false)}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1 cursor-pointer ${
+                !modoAgrupado
+                  ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs font-bold"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+              }`}
+              title="Exibir 1 card por empresa/filial individualmente"
+            >
+              Individual
+            </button>
+          </div>
         </div>
       </div>
 
@@ -218,6 +317,37 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
             return o.status === col.id;
           });
 
+          // Agrupamento por Obrigação + Grupo
+          const gruposCards = useMemo(() => {
+            if (!modoAgrupado) return null;
+
+            const map: Record<string, {
+              key: string;
+              tipo_obrigacao: any;
+              grupo: any;
+              itens: any[];
+            }> = {};
+
+            itensDaColuna.forEach((item) => {
+              const grupoId = item.estabelecimento?.grupo?.id || item.estabelecimento?.grupo?.nome || "default";
+              const tipoId = item.tipo_obrigacao?.id || item.tipo_obrigacao?.nome || "tipo";
+              const key = `${tipoId}_${grupoId}`;
+
+              if (!map[key]) {
+                map[key] = {
+                  key,
+                  tipo_obrigacao: item.tipo_obrigacao,
+                  grupo: item.estabelecimento?.grupo,
+                  itens: [],
+                };
+              }
+              map[key].itens.push(item);
+            });
+
+            return Object.values(map);
+          }, [itensDaColuna, modoAgrupado]);
+
+          const totalContagem = itensDaColuna.length;
           const isOver = dragOverCol === col.id;
 
           return (
@@ -239,92 +369,282 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
                   <ColumnIcon className="h-4 w-4" />
                   <h3 className="font-bold text-xs uppercase tracking-wider">{col.title}</h3>
                 </div>
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white/60 dark:bg-black/40">
-                  {itensDaColuna.length}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  {modoAgrupado && gruposCards && (
+                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                      {gruposCards.length} obrig. •
+                    </span>
+                  )}
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white/70 dark:bg-black/40">
+                    {totalContagem}
+                  </span>
+                </div>
               </div>
 
               {/* Lista de Cartões da Coluna */}
               <div className="space-y-3 flex-1">
-                {itensDaColuna.length === 0 && (
+                {totalContagem === 0 && (
                   <div className="border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-6 text-center text-slate-400 text-xs">
                     Nenhuma rotina nesta etapa.
                   </div>
                 )}
 
-                {itensDaColuna.map((o) => {
-                  const isAtrasado = new Date(o.prazo_vencimento) < new Date() && o.status !== "entregue";
-                  const empresaNome = o.estabelecimento?.nome_fantasia || o.estabelecimento?.razao_social || "";
-                  const grupoNome = o.estabelecimento?.grupo?.nome || "";
+                {/* MODO AGRUPADO POR OBRIGAÇÃO (NOVO) */}
+                {modoAgrupado && gruposCards
+                  ? gruposCards.map((card) => {
+                      // Determinar item selecionado no card
+                      const cardKey = `${col.id}_${card.key}`;
+                      const selectedId = selectedEstByCard[cardKey] || card.itens[0]?.id;
+                      const activeItem = card.itens.find((i) => i.id === selectedId) || card.itens[0];
 
-                  return (
-                    <div
-                      key={o.id}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, o.id)}
-                      className={`p-3.5 rounded-xl border bg-white dark:bg-slate-900 shadow-2xs hover:shadow-md transition-all cursor-grab active:cursor-grabbing space-y-3 group ${
-                        draggedId === o.id ? "opacity-40 scale-95" : ""
-                      } ${isAtrasado ? "border-rose-200 dark:border-rose-900/60 bg-rose-50/30 dark:bg-rose-950/10" : "border-slate-200/80 dark:border-slate-800"}`}
-                    >
-                      {/* Top Badges */}
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/40">
-                          {grupoNome}
-                        </span>
-                        <EsferaBadge esfera={o.tipo_obrigacao?.esfera} />
-                      </div>
+                      if (!activeItem) return null;
 
-                      {/* Título & Empresa */}
-                      <div>
-                        <Link
-                          href={`/obrigacoes/${o.id}`}
-                          className="font-bold text-sm text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-1"
+                      const isAtrasado =
+                        new Date(activeItem.prazo_vencimento) < new Date() && activeItem.status !== "entregue";
+                      const empresaNome =
+                        activeItem.estabelecimento?.nome_fantasia || activeItem.estabelecimento?.razao_social || "";
+                      const grupoNome = card.grupo?.nome || activeItem.estabelecimento?.grupo?.nome || "";
+                      const totalFiliais = card.itens.length;
+
+                      return (
+                        <div
+                          key={cardKey}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, activeItem.id)}
+                          className={`p-3.5 rounded-xl border bg-white dark:bg-slate-900 shadow-2xs hover:shadow-md transition-all space-y-3 group ${
+                            draggedId === activeItem.id ? "opacity-40 scale-95" : ""
+                          } ${
+                            isAtrasado
+                              ? "border-rose-200 dark:border-rose-900/60 bg-rose-50/20 dark:bg-rose-950/10"
+                              : "border-slate-200/80 dark:border-slate-800"
+                          }`}
                         >
-                          {o.tipo_obrigacao?.nome}
-                        </Link>
-                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium line-clamp-1 mt-0.5">
-                          {empresaNome}
-                          {o.estabelecimento?.is_matriz && (
-                            <span className="ml-1 text-[9px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-bold px-1 rounded">
-                              MATRIZ
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-[10px] text-slate-400 font-mono">
-                          {formatarCNPJ(o.estabelecimento?.cnpj || "")}
-                        </p>
-                      </div>
+                          {/* Top Badges & Total de Empresas */}
+                          <div className="flex items-center justify-between gap-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/40">
+                                {grupoNome}
+                              </span>
+                              <EsferaBadge esfera={card.tipo_obrigacao?.esfera} />
+                            </div>
 
-                      {/* Footer: Vencimento + Responsável */}
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 text-xs">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                          <span className={`font-semibold font-mono text-[11px] ${isAtrasado ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-slate-300"}`}>
-                            {format(new Date(o.prazo_vencimento + "T12:00:00"), "dd/MM")}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          {o.responsavel?.nome ? (
-                            <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                              <User className="h-3 w-3 text-indigo-500" />
-                              {o.responsavel.nome.split(" ")[0]}
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleQuickAssumir(o.id)}
-                              className="text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 border border-sky-200/60 px-1.5 py-0.5 rounded transition-colors flex items-center gap-1"
+                            <span
+                              className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex items-center gap-1"
+                              title={`${totalFiliais} empresa(s) nesta etapa`}
                             >
-                              <UserCheck className="h-3 w-3" /> Assumir
-                            </button>
-                          )}
-                          <EditarObrigacaoExistenteModal obrigacao={o} />
+                              <Building2 className="h-3 w-3 text-indigo-500" />
+                              {totalFiliais} {totalFiliais === 1 ? "empresa" : "empresas"}
+                            </span>
+                          </div>
+
+                          {/* Título da Obrigação */}
+                          <div>
+                            <Link
+                              href={`/obrigacoes/${activeItem.id}`}
+                              className="font-bold text-sm text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-1 flex items-center gap-1"
+                            >
+                              <GripVertical className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600 cursor-grab shrink-0" />
+                              {card.tipo_obrigacao?.nome}
+                            </Link>
+                          </div>
+
+                          {/* Seletor da Empresa Dentro do Card */}
+                          <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                                <Building2 className="h-3 w-3 text-indigo-500" />
+                                Empresa / Filial:
+                              </span>
+                              {activeItem.estabelecimento?.is_matriz && (
+                                <span className="text-[9px] bg-indigo-600 text-white font-bold px-1 rounded">
+                                  MATRIZ
+                                </span>
+                              )}
+                            </div>
+
+                            <Select
+                              value={activeItem.id}
+                              onValueChange={(val) => {
+                                if (val) {
+                                  setSelectedEstByCard((prev) => ({
+                                    ...prev,
+                                    [cardKey]: val,
+                                  }));
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-white dark:bg-slate-900 font-medium">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="max-w-[320px]">
+                                {card.itens.map((it) => {
+                                  const nomeCurto =
+                                    it.estabelecimento?.nome_fantasia || it.estabelecimento?.razao_social || "";
+                                  return (
+                                    <SelectItem key={it.id} value={it.id} className="text-xs py-1.5">
+                                      <div className="flex flex-col text-left">
+                                        <span className="font-semibold text-slate-900 dark:text-slate-100">
+                                          {nomeCurto}{" "}
+                                          {it.estabelecimento?.is_matriz && (
+                                            <span className="text-[10px] text-indigo-600 font-bold ml-1">(MATRIZ)</span>
+                                          )}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 font-mono">
+                                          {formatarCNPJ(it.estabelecimento?.cnpj || "")}
+                                        </span>
+                                      </div>
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+
+                            {/* Mini detalhes da empresa selecionada */}
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between pt-0.5">
+                              <span className="truncate max-w-[170px]" title={activeItem.estabelecimento?.razao_social}>
+                                {activeItem.estabelecimento?.razao_social}
+                              </span>
+                              <span className="font-mono text-[10px] shrink-0">
+                                {formatarCNPJ(activeItem.estabelecimento?.cnpj || "")}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Footer: Vencimento + Responsável + Ações */}
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800/80 text-xs">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                              <span
+                                className={`font-semibold font-mono text-[11px] ${
+                                  isAtrasado ? "text-rose-600 dark:text-rose-400 font-bold" : "text-slate-700 dark:text-slate-300"
+                                }`}
+                              >
+                                {format(new Date(activeItem.prazo_vencimento + "T12:00:00"), "dd/MM")}
+                              </span>
+                              {isAtrasado && (
+                                <span className="text-[9px] bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300 font-bold px-1 rounded">
+                                  ATRASO
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              {activeItem.responsavel?.nome ? (
+                                <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                  <User className="h-3 w-3 text-indigo-500" />
+                                  {activeItem.responsavel.nome.split(" ")[0]}
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickAssumir(activeItem.id)}
+                                  className="text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 border border-sky-200/60 px-1.5 py-0.5 rounded transition-colors flex items-center gap-1"
+                                >
+                                  <UserCheck className="h-3 w-3" /> Assumir
+                                </button>
+                              )}
+
+                              {/* Ação rápida Concluir */}
+                              {activeItem.status !== "entregue" && (
+                                <button
+                                  type="button"
+                                  onClick={() => setConcluirTarget(activeItem)}
+                                  className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 border border-emerald-200/60 px-1.5 py-0.5 rounded transition-colors flex items-center gap-0.5"
+                                  title="Concluir e anexar comprovante desta filial"
+                                >
+                                  <CheckCircle2 className="h-3 w-3" /> Concluir
+                                </button>
+                              )}
+
+                              <EditarObrigacaoExistenteModal obrigacao={activeItem} />
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })
+                  : /* MODO INDIVIDUAL (ANTIGO) */
+                    itensDaColuna.map((o) => {
+                      const isAtrasado =
+                        new Date(o.prazo_vencimento) < new Date() && o.status !== "entregue";
+                      const empresaNome =
+                        o.estabelecimento?.nome_fantasia || o.estabelecimento?.razao_social || "";
+                      const grupoNome = o.estabelecimento?.grupo?.nome || "";
+
+                      return (
+                        <div
+                          key={o.id}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, o.id)}
+                          className={`p-3.5 rounded-xl border bg-white dark:bg-slate-900 shadow-2xs hover:shadow-md transition-all cursor-grab active:cursor-grabbing space-y-3 group ${
+                            draggedId === o.id ? "opacity-40 scale-95" : ""
+                          } ${
+                            isAtrasado
+                              ? "border-rose-200 dark:border-rose-900/60 bg-rose-50/30 dark:bg-rose-950/10"
+                              : "border-slate-200/80 dark:border-slate-800"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/40">
+                              {grupoNome}
+                            </span>
+                            <EsferaBadge esfera={o.tipo_obrigacao?.esfera} />
+                          </div>
+
+                          <div>
+                            <Link
+                              href={`/obrigacoes/${o.id}`}
+                              className="font-bold text-sm text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-1"
+                            >
+                              {o.tipo_obrigacao?.nome}
+                            </Link>
+                            <p className="text-xs text-slate-600 dark:text-slate-300 font-medium line-clamp-1 mt-0.5">
+                              {empresaNome}
+                              {o.estabelecimento?.is_matriz && (
+                                <span className="ml-1 text-[9px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-bold px-1 rounded">
+                                  MATRIZ
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-mono">
+                              {formatarCNPJ(o.estabelecimento?.cnpj || "")}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 text-xs">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                              <span
+                                className={`font-semibold font-mono text-[11px] ${
+                                  isAtrasado
+                                    ? "text-rose-600 dark:text-rose-400"
+                                    : "text-slate-700 dark:text-slate-300"
+                                }`}
+                              >
+                                {format(new Date(o.prazo_vencimento + "T12:00:00"), "dd/MM")}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              {o.responsavel?.nome ? (
+                                <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                  <User className="h-3 w-3 text-indigo-500" />
+                                  {o.responsavel.nome.split(" ")[0]}
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickAssumir(o.id)}
+                                  className="text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 border border-sky-200/60 px-1.5 py-0.5 rounded transition-colors flex items-center gap-1"
+                                >
+                                  <UserCheck className="h-3 w-3" /> Assumir
+                                </button>
+                              )}
+                              <EditarObrigacaoExistenteModal obrigacao={o} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
               </div>
             </div>
           );
