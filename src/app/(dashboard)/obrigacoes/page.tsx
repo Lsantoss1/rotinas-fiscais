@@ -1,4 +1,4 @@
-﻿import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { ObrigacoesMainView } from "@/components/obrigacoes/ObrigacoesMainView";
 
 async function getObrigacoes() {
@@ -12,8 +12,7 @@ async function getObrigacoes() {
       estabelecimento:estabelecimentos(id, razao_social, nome_fantasia, cnpj, is_matriz, grupo:grupos(id, nome)),
       responsavel:usuarios(id, nome)
     `)
-    .order("prazo_vencimento", { ascending: true })
-    .limit(200);
+    .order("prazo_vencimento", { ascending: true });
 
   return data ?? [];
 }

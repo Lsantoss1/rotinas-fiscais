@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
@@ -27,7 +27,6 @@ import {
   User,
   Building2,
   Layers,
-  ArrowRight,
   GripVertical,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -68,12 +67,25 @@ const COLUMNS = [
   },
 ];
 
+function sortCardItens(itens: any[]) {
+  return [...itens].sort((a, b) => {
+    const isMatrizA = a.estabelecimento?.is_matriz ? 1 : 0;
+    const isMatrizB = b.estabelecimento?.is_matriz ? 1 : 0;
+    if (isMatrizA !== isMatrizB) return isMatrizB - isMatrizA;
+
+    const nameA = `${a.estabelecimento?.razao_social || ""} ${a.estabelecimento?.nome_fantasia || ""}`;
+    const nameB = `${b.estabelecimento?.razao_social || ""} ${b.estabelecimento?.nome_fantasia || ""}`;
+    return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: "base" });
+  });
+}
+
 export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps) {
   const [obrigacoes, setObrigacoes] = useState(inicialObrigacoes);
   const [searchTerm, setSearchTerm] = useState("");
   const [filtroEsfera, setFiltroEsfera] = useState("todas");
   const [filtroGrupo, setFiltroGrupo] = useState("todos");
-  const [modoAgrupado, setModoAgrupado] = useState(true); // Default true (Agrupar por obrigação)
+  const [filtroCompetencia, setFiltroCompetencia] = useState("2026-08-01"); // Padrão 08/2026
+  const [modoAgrupado, setModoAgrupado] = useState(true);
   const [selectedEstByCard, setSelectedEstByCard] = useState<Record<string, string>>({});
 
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -83,7 +95,16 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
   const router = useRouter();
   const supabase = createClient();
 
-  // Lista de grupos unicos para filtro
+  // Lista de competencias disponiveis
+  const competenciasDisponiveis = useMemo(() => {
+    const setComp = new Set<string>();
+    obrigacoes.forEach((o) => {
+      if (o.competencia) setComp.add(o.competencia);
+    });
+    return Array.from(setComp).sort();
+  }, [obrigacoes]);
+
+  // Lista de grupos unicos
   const gruposUnicos = useMemo(() => {
     const setGrupos = new Set<string>();
     obrigacoes.forEach((o) => {
@@ -93,9 +114,10 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
     return Array.from(setGrupos).sort();
   }, [obrigacoes]);
 
-  // Filtragem
+  // Filtragem (aplica competencia, grupo, esfera e busca)
   const obrigacoesFiltradas = useMemo(() => {
     return obrigacoes.filter((o) => {
+      if (filtroCompetencia !== "todas" && o.competencia !== filtroCompetencia) return false;
       if (filtroEsfera !== "todas" && o.tipo_obrigacao?.esfera !== filtroEsfera) return false;
       if (filtroGrupo !== "todos" && o.estabelecimento?.grupo?.nome !== filtroGrupo) return false;
 
@@ -116,7 +138,7 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
       }
       return true;
     });
-  }, [obrigacoes, filtroEsfera, filtroGrupo, searchTerm]);
+  }, [obrigacoes, filtroCompetencia, filtroEsfera, filtroGrupo, searchTerm]);
 
   // Handler de Arraste
   function handleDragStart(e: React.DragEvent, id: string) {
@@ -153,13 +175,11 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
     const item = obrigacoes.find((o) => o.id === id);
     if (!item || item.status === targetColId) return;
 
-    // Se soltou em 'entregue', abre o modal de upload de comprovante
     if (targetColId === "entregue") {
       setConcluirTarget(item);
       return;
     }
 
-    // Atualização otimista
     const prevStatus = item.status;
     setObrigacoes((prev) =>
       prev.map((o) => (o.id === id ? { ...o, status: targetColId } : o))
@@ -185,7 +205,6 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
       if (!res.ok) throw new Error("Falha ao atualizar status");
       router.refresh();
     } catch (err) {
-      // Rollback se falhar
       setObrigacoes((prev) =>
         prev.map((o) => (o.id === id ? { ...o, status: prevStatus } : o))
       );
@@ -231,7 +250,7 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
     <div className="space-y-4">
       {/* Barra de Busca e Filtros */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-        <div className="relative w-full lg:w-80">
+        <div className="relative w-full lg:w-72">
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <Input
             placeholder="Buscar por obrigação, empresa ou CNPJ..."
@@ -242,12 +261,30 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          {/* Filtro de Competencia (Crucial para não misturar meses) */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500 font-medium">Competência:</span>
+            <Select value={filtroCompetencia} onValueChange={(val) => setFiltroCompetencia(val || "2026-08-01")}>
+              <SelectTrigger className="h-9 text-xs w-[130px] font-bold text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/30">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {competenciasDisponiveis.map((c) => (
+                  <SelectItem key={c} value={c} className="text-xs font-semibold">
+                    {format(new Date(c + "T12:00:00"), "MM/yyyy")} {c === "2026-08-01" ? "(Atual)" : ""}
+                  </SelectItem>
+                ))}
+                <SelectItem value="todas" className="text-xs font-semibold">Todas</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Filtro de Grupo */}
           {gruposUnicos.length > 1 && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-slate-500 font-medium">Grupo:</span>
               <Select value={filtroGrupo} onValueChange={(val) => setFiltroGrupo(val || "todos")}>
-                <SelectTrigger className="h-9 text-xs w-[140px]">
+                <SelectTrigger className="h-9 text-xs w-[135px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -266,7 +303,7 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-slate-500 font-medium">Esfera:</span>
             <Select value={filtroEsfera} onValueChange={(val) => setFiltroEsfera(val || "todas")}>
-              <SelectTrigger className="h-9 text-xs w-[130px]">
+              <SelectTrigger className="h-9 text-xs w-[125px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -317,7 +354,7 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
             return o.status === col.id;
           });
 
-          // Agrupamento por Obrigação + Grupo
+          // Agrupamento por Obrigação + Grupo + Competência (Impede misturar meses!)
           const gruposCards = useMemo(() => {
             if (!modoAgrupado) return null;
 
@@ -325,26 +362,33 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
               key: string;
               tipo_obrigacao: any;
               grupo: any;
+              competencia: string;
               itens: any[];
             }> = {};
 
             itensDaColuna.forEach((item) => {
               const grupoId = item.estabelecimento?.grupo?.id || item.estabelecimento?.grupo?.nome || "default";
               const tipoId = item.tipo_obrigacao?.id || item.tipo_obrigacao?.nome || "tipo";
-              const key = `${tipoId}_${grupoId}`;
+              const comp = item.competencia || "geral";
+              const key = `${tipoId}_${grupoId}_${comp}`;
 
               if (!map[key]) {
                 map[key] = {
                   key,
                   tipo_obrigacao: item.tipo_obrigacao,
                   grupo: item.estabelecimento?.grupo,
+                  competencia: comp,
                   itens: [],
                 };
               }
               map[key].itens.push(item);
             });
 
-            return Object.values(map);
+            // Ordena os itens de cada card para matriz ficar sempre no topo seguida pelas filiais numeradas
+            return Object.values(map).map((group) => ({
+              ...group,
+              itens: sortCardItens(group.itens),
+            }));
           }, [itensDaColuna, modoAgrupado]);
 
           const totalContagem = itensDaColuna.length;
@@ -389,10 +433,9 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
                   </div>
                 )}
 
-                {/* MODO AGRUPADO POR OBRIGAÇÃO (NOVO) */}
+                {/* MODO AGRUPADO POR OBRIGAÇÃO */}
                 {modoAgrupado && gruposCards
                   ? gruposCards.map((card) => {
-                      // Determinar item selecionado no card
                       const cardKey = `${col.id}_${card.key}`;
                       const selectedId = selectedEstByCard[cardKey] || card.itens[0]?.id;
                       const activeItem = card.itens.find((i) => i.id === selectedId) || card.itens[0];
@@ -401,10 +444,9 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
 
                       const isAtrasado =
                         new Date(activeItem.prazo_vencimento) < new Date() && activeItem.status !== "entregue";
-                      const empresaNome =
-                        activeItem.estabelecimento?.nome_fantasia || activeItem.estabelecimento?.razao_social || "";
                       const grupoNome = card.grupo?.nome || activeItem.estabelecimento?.grupo?.nome || "";
                       const totalFiliais = card.itens.length;
+                      const compFormatada = card.competencia ? format(new Date(card.competencia + "T12:00:00"), "MM/yyyy") : "";
 
                       return (
                         <div
@@ -426,13 +468,18 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
                                 {grupoNome}
                               </span>
                               <EsferaBadge esfera={card.tipo_obrigacao?.esfera} />
+                              {compFormatada && (
+                                <span className="text-[10px] font-mono font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                  {compFormatada}
+                                </span>
+                              )}
                             </div>
 
                             <span
-                              className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex items-center gap-1"
-                              title={`${totalFiliais} empresa(s) nesta etapa`}
+                              className="text-[11px] font-bold text-slate-700 dark:text-slate-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900/50 px-2 py-0.5 rounded-full flex items-center gap-1"
+                              title={`${totalFiliais} empresas cadastradas para esta obrigação`}
                             >
-                              <Building2 className="h-3 w-3 text-indigo-500" />
+                              <Building2 className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
                               {totalFiliais} {totalFiliais === 1 ? "empresa" : "empresas"}
                             </span>
                           </div>
@@ -544,7 +591,6 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
                                 </button>
                               )}
 
-                              {/* Ação rápida Concluir */}
                               {activeItem.status !== "entregue" && (
                                 <button
                                   type="button"
@@ -562,7 +608,7 @@ export function KanbanBoardClient({ obrigacoes: inicialObrigacoes }: KanbanProps
                         </div>
                       );
                     })
-                  : /* MODO INDIVIDUAL (ANTIGO) */
+                  : /* MODO INDIVIDUAL */
                     itensDaColuna.map((o) => {
                       const isAtrasado =
                         new Date(o.prazo_vencimento) < new Date() && o.status !== "entregue";
